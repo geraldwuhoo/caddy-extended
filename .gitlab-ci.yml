@@ -1,20 +1,108 @@
-image: docker:20
+stages:
+  - build
+  - push
+  - finalize
 
 variables:
-  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKERIO_MIRROR: hub.wuhoo.xyz
 
-services:
-  - docker:20-dind
-
-before_script:
-  - docker info
-
-build:
+.build: &build
   stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.1-debug
+    entrypoint: [""]
   before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - export FULL_IMAGE_NAME="$([ "$CI_COMMIT_BRANCH" = "master" ] && echo "$CI_REGISTRY_IMAGE" || echo "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH")"
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+
+.push: &push
+  stage: push
+  image:
+    name: gcr.io/go-containerregistry/crane/debug:v0.11.0
+    entrypoint: [""]
+  before_script:
+    - crane auth login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+  rules:
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+
+build-amd64:
+  <<: *build
   script:
-    - docker build -t "$FULL_IMAGE_NAME:latest" -t "$FULL_IMAGE_NAME:$CI_COMMIT_SHORT_SHA" .
-    - docker push "$FULL_IMAGE_NAME:latest"
-    - docker push "$FULL_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+    - >-
+      /kaniko/executor
+      --registry-mirror "${DOCKERIO_MIRROR}"
+      --build-arg opts="CGO_ENABLED=0 GOARCH=amd64"
+      --customPlatform=linux/amd64
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination=image
+      --no-push
+      --tarPath image-amd64.tar
+      --cache=true
+      --cache-repo "${CI_REGISTRY_IMAGE}/build-cache-amd64"
+      --cache-ttl 168h0m0s
+  artifacts:
+    untracked: false
+    expire_in: 7 days
+    paths:
+      - image-amd64.tar
+    when: on_success
+
+build-arm64:
+  <<: *build
+  script:
+    - >-
+      /kaniko/executor
+      --registry-mirror "${DOCKERIO_MIRROR}"
+      --build-arg opts="GOARCH=arm64"
+      --customPlatform=linux/arm64/v8
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination=image
+      --no-push
+      --tarPath image-arm64.tar
+      --cache=true
+      --cache-repo "${CI_REGISTRY_IMAGE}/build-cache-arm64"
+      --cache-ttl 168h0m0s
+  tags:
+    - arm64
+  artifacts:
+    untracked: false
+    expire_in: 7 days
+    paths:
+      - image-arm64.tar
+    when: on_success
+
+push-amd64:
+  <<: *push
+  script:
+    - crane push image-amd64.tar ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}-amd64
+    - crane push image-amd64.tar ${CI_REGISTRY_IMAGE}:latest-amd64
+  needs:
+    - build-amd64
+
+push-arm64:
+  <<: *push
+  script:
+    - crane push image-arm64.tar ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}-arm64
+    - crane push image-arm64.tar ${CI_REGISTRY_IMAGE}:latest-arm64
+  needs:
+    - build-arm64
+
+finalize-multi-arch:
+  stage: finalize
+  image:
+    name: mplatform/manifest-tool:alpine-v2.0.6
+    entrypoint: [""]
+  script:
+    - >-
+      /manifest-tool
+      --username ${CI_REGISTRY_USER}
+      --password ${CI_REGISTRY_PASSWORD}
+      push from-args
+      --platforms linux/amd64,linux/arm64/v8 \
+      --template ${CI_REGISTRY_IMAGE}:latest-ARCH
+      --target ${CI_REGISTRY_IMAGE}:latest
+  needs:
+    - push-amd64
+    - push-arm64
