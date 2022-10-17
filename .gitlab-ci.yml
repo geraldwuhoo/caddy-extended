@@ -54,7 +54,7 @@ build-arm64:
     - >-
       /kaniko/executor
       --registry-mirror "${DOCKERIO_MIRROR}"
-      --build-arg opts="GOARCH=arm64"
+      --build-arg opts="CGO_ENABLED=0 GOARCH=arm64"
       --customPlatform=linux/arm64/v8
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
@@ -100,7 +100,7 @@ finalize-multi-arch:
       --username ${CI_REGISTRY_USER}
       --password ${CI_REGISTRY_PASSWORD}
       push from-args
-      --platforms linux/amd64,linux/arm64/v8 \
+      --platforms linux/amd64,linux/arm64/v8
       --template ${CI_REGISTRY_IMAGE}:latest-ARCH
       --target ${CI_REGISTRY_IMAGE}:latest
   needs:
