@@ -18,7 +18,7 @@ variables:
 .push: &push
   stage: push
   image:
-    name: gcr.io/go-containerregistry/crane/debug:v0.13.0
+    name: gcr.io/go-containerregistry/crane/debug:v0.15.2
     entrypoint: [""]
   before_script:
     - crane auth login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
