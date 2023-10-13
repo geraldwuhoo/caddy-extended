@@ -92,7 +92,7 @@ push-arm64:
 finalize-multi-arch:
   stage: finalize
   image:
-    name: mplatform/manifest-tool:alpine-v2.0.6
+    name: mplatform/manifest-tool:alpine-v2.0.8
     entrypoint: [""]
   script:
     - >-
