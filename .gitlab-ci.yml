@@ -6,7 +6,7 @@ stages:
 variables:
   DOCKERIO_MIRROR: hub.wuhoo.xyz
 
-.build: &build
+.build:
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:v1.15.0-debug
@@ -15,7 +15,7 @@ variables:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
 
-.push: &push
+.push:
   stage: push
   image:
     name: gcr.io/go-containerregistry/crane/debug:v0.15.2
@@ -26,7 +26,7 @@ variables:
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
 
 build-amd64:
-  <<: *build
+  extends: .build
   script:
     - >-
       /kaniko/executor
@@ -49,7 +49,7 @@ build-amd64:
     when: on_success
 
 build-arm64:
-  <<: *build
+  extends: .build
   script:
     - >-
       /kaniko/executor
@@ -74,7 +74,7 @@ build-arm64:
     when: on_success
 
 push-amd64:
-  <<: *push
+  extends: .push
   script:
     - crane push image-amd64.tar ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}-amd64
     - crane push image-amd64.tar ${CI_REGISTRY_IMAGE}:latest-amd64
@@ -82,7 +82,7 @@ push-amd64:
     - build-amd64
 
 push-arm64:
-  <<: *push
+  extends: .push
   script:
     - crane push image-arm64.tar ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}-arm64
     - crane push image-arm64.tar ${CI_REGISTRY_IMAGE}:latest-arm64
