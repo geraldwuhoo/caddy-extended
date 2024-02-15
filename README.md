@@ -1,3 +1,5 @@
+Archived in favor of [caddy-pq](https://gitlab.wuhoo.xyz/jerry/caddy-pq)
+
 # Caddy Extended
 
 [![pipeline status](https://gitlab.wuhoo.xyz/jerry/caddy-extended/badges/master/pipeline.svg)](https://gitlab.wuhoo.xyz/jerry/caddy-extended/-/commits/master) 
